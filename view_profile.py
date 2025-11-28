@@ -109,6 +109,7 @@ def view_profile_html(prof_file_path, output_html_path=None):
 <head>
     <meta charset="UTF-8">
     <title>Profile Results - {prof_file_path}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         body {{
             font-family: Arial, sans-serif;
@@ -253,6 +254,22 @@ def view_profile_html(prof_file_path, output_html_path=None):
         .clickable-row:hover td {{
             background-color: #e3f2fd !important;
         }}
+        .chart-container {{
+            position: relative;
+            height: 400px;
+            margin: 20px 0;
+        }}
+        .charts-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }}
+        @media (max-width: 1200px) {{
+            .charts-grid {{
+                grid-template-columns: 1fr;
+            }}
+        }}
     </style>
 </head>
 <body>
@@ -283,6 +300,36 @@ def view_profile_html(prof_file_path, output_html_path=None):
                 <td style="padding: 8px; border: none;">{total_execution_time:.6f} seconds</td>
             </tr>
         </table>
+    </div>
+
+    <div class="stats-section">
+        <h2>Performance Charts</h2>
+        <div class="charts-grid">
+            <div>
+                <h3>Top 10 Functions by Cumulative Time</h3>
+                <div class="chart-container">
+                    <canvas id="cumtimeChart"></canvas>
+                </div>
+            </div>
+            <div>
+                <h3>Top 10 Functions by Total Time</h3>
+                <div class="chart-container">
+                    <canvas id="tottimeChart"></canvas>
+                </div>
+            </div>
+            <div>
+                <h3>Top 10 Most Called Functions</h3>
+                <div class="chart-container">
+                    <canvas id="ncallsChart"></canvas>
+                </div>
+            </div>
+            <div>
+                <h3>Time Distribution (Top 10 by Cumtime)</h3>
+                <div class="chart-container">
+                    <canvas id="timeDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="stats-section">
@@ -502,6 +549,217 @@ Click on any row to view callers and callees
 
         // Initial render (sorted by cumtime desc)
         sortData('cumtime', 'number', 'desc');
+
+        // Create charts
+        function createCharts() {{
+            // Prepare data - extract function name from full path
+            const getFunctionName = (fullPath) => {{
+                const match = fullPath.match(/\\(([^)]+)\\)$/);
+                if (match) {{
+                    return match[1];
+                }}
+                return fullPath.split('/').pop();
+            }};
+
+            // Sort and get top 10 by cumulative time
+            const topByCumtime = [...statsData]
+                .sort((a, b) => b.cumtime - a.cumtime)
+                .slice(0, 10);
+
+            // Sort and get top 10 by total time
+            const topByTottime = [...statsData]
+                .sort((a, b) => b.tottime - a.tottime)
+                .slice(0, 10);
+
+            // Sort and get top 10 by number of calls
+            const topByNcalls = [...statsData]
+                .sort((a, b) => {{
+                    const aNum = parseInt(a.ncalls.split('/')[0]);
+                    const bNum = parseInt(b.ncalls.split('/')[0]);
+                    return bNum - aNum;
+                }})
+                .slice(0, 10);
+
+            // Chart colors
+            const colors = [
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)',
+                'rgba(153, 102, 255, 0.7)',
+                'rgba(255, 159, 64, 0.7)',
+                'rgba(199, 199, 199, 0.7)',
+                'rgba(83, 102, 255, 0.7)',
+                'rgba(255, 99, 255, 0.7)',
+                'rgba(99, 255, 132, 0.7)'
+            ];
+
+            // 1. Cumulative Time Chart (Horizontal Bar)
+            new Chart(document.getElementById('cumtimeChart'), {{
+                type: 'bar',
+                data: {{
+                    labels: topByCumtime.map(d => getFunctionName(d.filename)),
+                    datasets: [{{
+                        label: 'Cumulative Time (seconds)',
+                        data: topByCumtime.map(d => d.cumtime),
+                        backgroundColor: colors,
+                        borderColor: colors.map(c => c.replace('0.7', '1')),
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{
+                            display: false
+                        }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    return 'Cumtime: ' + context.parsed.x.toFixed(6) + 's';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'Time (seconds)'
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+
+            // 2. Total Time Chart (Horizontal Bar)
+            new Chart(document.getElementById('tottimeChart'), {{
+                type: 'bar',
+                data: {{
+                    labels: topByTottime.map(d => getFunctionName(d.filename)),
+                    datasets: [{{
+                        label: 'Total Time (seconds)',
+                        data: topByTottime.map(d => d.tottime),
+                        backgroundColor: colors,
+                        borderColor: colors.map(c => c.replace('0.7', '1')),
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{
+                            display: false
+                        }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    return 'Tottime: ' + context.parsed.x.toFixed(6) + 's';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'Time (seconds)'
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+
+            // 3. Number of Calls Chart (Bar)
+            new Chart(document.getElementById('ncallsChart'), {{
+                type: 'bar',
+                data: {{
+                    labels: topByNcalls.map(d => getFunctionName(d.filename)),
+                    datasets: [{{
+                        label: 'Number of Calls',
+                        data: topByNcalls.map(d => parseInt(d.ncalls.split('/')[0])),
+                        backgroundColor: colors,
+                        borderColor: colors.map(c => c.replace('0.7', '1')),
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{
+                            display: false
+                        }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    return 'Calls: ' + context.parsed.x.toLocaleString();
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'Number of Calls'
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+
+            // 4. Time Distribution Pie Chart
+            new Chart(document.getElementById('timeDistributionChart'), {{
+                type: 'pie',
+                data: {{
+                    labels: topByCumtime.map(d => getFunctionName(d.filename)),
+                    datasets: [{{
+                        label: 'Time Distribution',
+                        data: topByCumtime.map(d => d.cumtime),
+                        backgroundColor: colors,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{
+                            position: 'right',
+                            labels: {{
+                                boxWidth: 12,
+                                font: {{
+                                    size: 10
+                                }}
+                            }}
+                        }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(2);
+                                    return context.label + ': ' + value.toFixed(6) + 's (' + percentage + '%)';
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+
+        // Create charts after page load
+        createCharts();
     </script>
 </body>
 </html>"""
