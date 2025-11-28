@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Profile Results - {{prof_file_path}}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #666;
+            margin-top: 30px;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .stats-section {
+            background-color: white;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        .file-info {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-left: 4px solid #2196F3;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        th {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            cursor: pointer;
+            user-select: none;
+            position: sticky;
+            top: 0;
+            position: relative;
+        }
+        th:hover {
+            background-color: #1976D2;
+        }
+        th[title] {
+            cursor: help;
+        }
+        th.sortable::after {
+            content: ' ⇅';
+            opacity: 0.5;
+        }
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .num {
+            text-align: right;
+        }
+        .filter-box {
+            margin-bottom: 15px;
+        }
+        .filter-box input {
+            padding: 8px;
+            width: 100%;
+            max-width: 500px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        pre {
+            white-space: pre;
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 900px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+        }
+        .call-tree {
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .call-tree-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 2px solid #2196F3;
+            padding-left: 10px;
+        }
+        .call-tree-item:hover {
+            background-color: #f5f5f5;
+        }
+        .clickable-row {
+            cursor: pointer;
+        }
+        .clickable-row:hover td {
+            background-color: #e3f2fd !important;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 20px 0;
+        }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Python Profile Results</h1>
+
+    <div class="file-info">
+        <strong>Profiled Function:</strong> {{main_function}}<br>
+        <strong>Profile file:</strong> {{prof_file_path}}
+    </div>
+
+    <div class="stats-section">
+        <h2>Overview</h2>
+        <table style="width: auto; margin-bottom: 20px;">
+            <tr>
+                <td style="padding: 8px; font-weight: bold; border: none;">Total Functions:</td>
+                <td style="padding: 8px; border: none;">{{total_functions}}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; font-weight: bold; border: none;">Total Function Calls:</td>
+                <td style="padding: 8px; border: none;">{{total_calls}}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; font-weight: bold; border: none;">Primitive Calls:</td>
+                <td style="padding: 8px; border: none;">{{total_primitive_calls}}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; font-weight: bold; border: none;">Total Execution Time:</td>
+                <td style="padding: 8px; border: none;">{{total_execution_time}} seconds</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="stats-section">
+        <h2>Performance Charts</h2>
+        <div class="charts-grid">
+            <div>
+                <h3>Top 10 Functions by Cumulative Time</h3>
+                <div class="chart-container">
+                    <canvas id="cumtimeChart"></canvas>
+                </div>
+            </div>
+            <div>
+                <h3>Top 10 Functions by Total Time</h3>
+                <div class="chart-container">
+                    <canvas id="tottimeChart"></canvas>
+                </div>
+            </div>
+            <div>
+                <h3>Top 10 Most Called Functions</h3>
+                <div class="chart-container">
+                    <canvas id="ncallsChart"></canvas>
+                </div>
+            </div>
+            <div>
+                <h3>Time Distribution (Top 10 by Cumtime)</h3>
+                <div class="chart-container">
+                    <canvas id="timeDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-section">
+        <h2>Profile Statistics (Sortable)</h2>
+        <div class="filter-box">
+            <input type="text" id="filterInput" placeholder="Filter by function name or file path...">
+        </div>
+        <table id="statsTable">
+            <thead>
+                <tr>
+                    <th class="sortable" data-column="ncalls" data-type="text" title="Number of calls (primitive calls/total calls if different)">ncalls</th>
+                    <th class="sortable" data-column="tottime" data-type="number" title="Total time spent in the function, excluding time spent in sub-functions">tottime</th>
+                    <th class="sortable" data-column="percall_tot" data-type="number" title="Total time divided by number of calls (tottime/ncalls)">percall</th>
+                    <th class="sortable" data-column="cumtime" data-type="number" title="Cumulative time spent in the function, including time spent in all sub-functions">cumtime</th>
+                    <th class="sortable" data-column="percall_cum" data-type="number" title="Cumulative time divided by primitive calls (cumtime/primitive calls)">percall</th>
+                    <th class="sortable" data-column="filename" data-type="text" title="File path, line number, and function name">filename:lineno(function)</th>
+                </tr>
+            </thead>
+            <tbody id="statsBody">
+            </tbody>
+        </table>
+    </div>
+
+    <div class="stats-section">
+        <h2>Caller Statistics (Top 10)</h2>
+        <pre>{{caller_stats}}</pre>
+    </div>
+
+    <div class="stats-section">
+        <h2>Column Descriptions</h2>
+        <pre>
+ncalls  - number of calls
+tottime - total time spent in the function (excluding sub-functions)
+percall - tottime divided by ncalls
+cumtime - cumulative time spent in the function (including sub-functions)
+percall - cumtime divided by primitive calls
+filename:lineno(function) - location and name of the function
+
+Click on any row to view callers and callees
+        </pre>
+    </div>
+
+    <!-- Modal for call tree -->
+    <div id="callTreeModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalFunctionName"></h2>
+            <div id="modalFunctionDetails"></div>
+
+            <h3>Called By (Callers):</h3>
+            <div id="callersTree" class="call-tree"></div>
+
+            <h3>Calls (Callees):</h3>
+            <div id="calleesTree" class="call-tree"></div>
+        </div>
+    </div>
+
+    <script>
+        // Stats data
+        const statsData = {{stats_json}};
+        const callRelationships = {{call_relationships_json}};
+        let currentSort = { column: 'cumtime', direction: 'desc' };
+        let filteredData = [...statsData];
+
+        // Render table
+        function renderTable(data) {
+            const tbody = document.getElementById('statsBody');
+            tbody.innerHTML = '';
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = 'clickable-row';
+                tr.innerHTML = `
+                    <td class="num">${row.ncalls}</td>
+                    <td class="num">${row.tottime.toFixed(6)}</td>
+                    <td class="num">${row.percall_tot.toFixed(6)}</td>
+                    <td class="num">${row.cumtime.toFixed(6)}</td>
+                    <td class="num">${row.percall_cum.toFixed(6)}</td>
+                    <td>${row.filename}</td>
+                `;
+                tr.onclick = () => showCallTree(row);
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Show call tree modal
+        function showCallTree(functionData) {
+            const modal = document.getElementById('callTreeModal');
+            const modalFunctionName = document.getElementById('modalFunctionName');
+            const modalFunctionDetails = document.getElementById('modalFunctionDetails');
+            const callersTree = document.getElementById('callersTree');
+            const calleesTree = document.getElementById('calleesTree');
+
+            // Set function name
+            modalFunctionName.textContent = functionData.filename;
+
+            // Set function details
+            modalFunctionDetails.innerHTML = `
+                <table style="width: auto;">
+                    <tr>
+                        <td style="padding: 5px; font-weight: bold;">Calls:</td>
+                        <td style="padding: 5px;">${functionData.ncalls}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 5px; font-weight: bold;">Total Time:</td>
+                        <td style="padding: 5px;">${functionData.tottime.toFixed(6)} seconds</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 5px; font-weight: bold;">Cumulative Time:</td>
+                        <td style="padding: 5px;">${functionData.cumtime.toFixed(6)} seconds</td>
+                    </tr>
+                </table>
+            `;
+
+            // Get call relationships
+            const relationships = callRelationships[functionData.filename];
+
+            // Render callers
+            if (relationships && relationships.callers.length > 0) {
+                callersTree.innerHTML = relationships.callers.map(caller => `
+                    <div class="call-tree-item">
+                        <strong>${caller.name}</strong><br>
+                        Calls: ${caller.ncalls}, CumTime: ${caller.cumtime.toFixed(6)}s
+                    </div>
+                `).join('');
+            } else {
+                callersTree.innerHTML = '<p>No callers (this might be a root function)</p>';
+            }
+
+            // Render callees
+            if (relationships && relationships.callees.length > 0) {
+                calleesTree.innerHTML = relationships.callees.map(callee => `
+                    <div class="call-tree-item">
+                        <strong>${callee.name}</strong><br>
+                        Calls: ${callee.ncalls}, CumTime: ${callee.cumtime.toFixed(6)}s
+                    </div>
+                `).join('');
+            } else {
+                calleesTree.innerHTML = '<p>No callees (this function doesn\'t call other functions)</p>';
+            }
+
+            modal.style.display = 'block';
+        }
+
+        // Close modal
+        document.querySelector('.close').onclick = function() {
+            document.getElementById('callTreeModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('callTreeModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Sort data
+        function sortData(column, type, forceDirection = null) {
+            let direction;
+            if (forceDirection) {
+                direction = forceDirection;
+            } else {
+                direction = currentSort.column === column && currentSort.direction === 'desc' ? 'asc' : 'desc';
+            }
+            currentSort = { column, direction };
+
+            filteredData.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+
+                if (type === 'number') {
+                    valA = parseFloat(valA);
+                    valB = parseFloat(valB);
+                }
+
+                if (direction === 'asc') {
+                    return valA > valB ? 1 : valA < valB ? -1 : 0;
+                } else {
+                    return valA < valB ? 1 : valA > valB ? -1 : 0;
+                }
+            });
+
+            updateSortIndicators(column, direction);
+            renderTable(filteredData);
+        }
+
+        // Update sort indicators
+        function updateSortIndicators(column, direction) {
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+            });
+            const header = document.querySelector(`th[data-column="${column}"]`);
+            if (header) {
+                header.classList.add(`sort-${direction}`);
+            }
+        }
+
+        // Filter data
+        function filterData(searchTerm) {
+            searchTerm = searchTerm.toLowerCase();
+            filteredData = statsData.filter(row =>
+                row.filename.toLowerCase().includes(searchTerm)
+            );
+            sortData(currentSort.column, document.querySelector(`th[data-column="${currentSort.column}"]`).dataset.type);
+        }
+
+        // Event listeners
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                sortData(th.dataset.column, th.dataset.type);
+            });
+        });
+
+        document.getElementById('filterInput').addEventListener('input', (e) => {
+            filterData(e.target.value);
+        });
+
+        // Initial render (sorted by cumtime desc)
+        sortData('cumtime', 'number', 'desc');
+
+        // Create charts
+        function createCharts() {
+            // Prepare data - extract function name from full path
+            const getFunctionName = (fullPath) => {
+                const match = fullPath.match(/\(([^)]+)\)$/);
+                if (match) {
+                    return match[1];
+                }
+                return fullPath.split('/').pop();
+            };
+
+            // Sort and get top 10 by cumulative time
+            const topByCumtime = [...statsData]
+                .sort((a, b) => b.cumtime - a.cumtime)
+                .slice(0, 10);
+
+            // Sort and get top 10 by total time
+            const topByTottime = [...statsData]
+                .sort((a, b) => b.tottime - a.tottime)
+                .slice(0, 10);
+
+            // Sort and get top 10 by number of calls
+            const topByNcalls = [...statsData]
+                .sort((a, b) => {
+                    const aNum = parseInt(a.ncalls.split('/')[0]);
+                    const bNum = parseInt(b.ncalls.split('/')[0]);
+                    return bNum - aNum;
+                })
+                .slice(0, 10);
+
+            // Chart colors
+            const colors = [
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)',
+                'rgba(153, 102, 255, 0.7)',
+                'rgba(255, 159, 64, 0.7)',
+                'rgba(199, 199, 199, 0.7)',
+                'rgba(83, 102, 255, 0.7)',
+                'rgba(255, 99, 255, 0.7)',
+                'rgba(99, 255, 132, 0.7)'
+            ];
+
+            // 1. Cumulative Time Chart (Horizontal Bar)
+            new Chart(document.getElementById('cumtimeChart'), {
+                type: 'bar',
+                data: {
+                    labels: topByCumtime.map(d => getFunctionName(d.filename)),
+                    datasets: [{
+                        label: 'Cumulative Time (seconds)',
+                        data: topByCumtime.map(d => d.cumtime),
+                        backgroundColor: colors,
+                        borderColor: colors.map(c => c.replace('0.7', '1')),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Cumtime: ' + context.parsed.x.toFixed(6) + 's';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Time (seconds)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 2. Total Time Chart (Horizontal Bar)
+            new Chart(document.getElementById('tottimeChart'), {
+                type: 'bar',
+                data: {
+                    labels: topByTottime.map(d => getFunctionName(d.filename)),
+                    datasets: [{
+                        label: 'Total Time (seconds)',
+                        data: topByTottime.map(d => d.tottime),
+                        backgroundColor: colors,
+                        borderColor: colors.map(c => c.replace('0.7', '1')),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Tottime: ' + context.parsed.x.toFixed(6) + 's';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Time (seconds)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 3. Number of Calls Chart (Bar)
+            new Chart(document.getElementById('ncallsChart'), {
+                type: 'bar',
+                data: {
+                    labels: topByNcalls.map(d => getFunctionName(d.filename)),
+                    datasets: [{
+                        label: 'Number of Calls',
+                        data: topByNcalls.map(d => parseInt(d.ncalls.split('/')[0])),
+                        backgroundColor: colors,
+                        borderColor: colors.map(c => c.replace('0.7', '1')),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Calls: ' + context.parsed.x.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Calls'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 4. Time Distribution Pie Chart
+            new Chart(document.getElementById('timeDistributionChart'), {
+                type: 'pie',
+                data: {
+                    labels: topByCumtime.map(d => getFunctionName(d.filename)),
+                    datasets: [{
+                        label: 'Time Distribution',
+                        data: topByCumtime.map(d => d.cumtime),
+                        backgroundColor: colors,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 12,
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(2);
+                                    return context.label + ': ' + value.toFixed(6) + 's (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create charts after page load
+        createCharts();
+    </script>
+</body>
+</html>
