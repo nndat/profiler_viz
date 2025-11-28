@@ -116,9 +116,13 @@ def view_profile_html(prof_file_path, output_html_path=None):
             user-select: none;
             position: sticky;
             top: 0;
+            position: relative;
         }}
         th:hover {{
             background-color: #1976D2;
+        }}
+        th[title] {{
+            cursor: help;
         }}
         th.sortable::after {{
             content: ' ⇅';
@@ -199,12 +203,12 @@ def view_profile_html(prof_file_path, output_html_path=None):
         <table id="statsTable">
             <thead>
                 <tr>
-                    <th class="sortable" data-column="ncalls" data-type="text">ncalls</th>
-                    <th class="sortable" data-column="tottime" data-type="number">tottime</th>
-                    <th class="sortable" data-column="percall_tot" data-type="number">percall</th>
-                    <th class="sortable" data-column="cumtime" data-type="number">cumtime</th>
-                    <th class="sortable" data-column="percall_cum" data-type="number">percall</th>
-                    <th class="sortable" data-column="filename" data-type="text">filename:lineno(function)</th>
+                    <th class="sortable" data-column="ncalls" data-type="text" title="Number of calls (primitive calls/total calls if different)">ncalls</th>
+                    <th class="sortable" data-column="tottime" data-type="number" title="Total time spent in the function, excluding time spent in sub-functions">tottime</th>
+                    <th class="sortable" data-column="percall_tot" data-type="number" title="Total time divided by number of calls (tottime/ncalls)">percall</th>
+                    <th class="sortable" data-column="cumtime" data-type="number" title="Cumulative time spent in the function, including time spent in all sub-functions">cumtime</th>
+                    <th class="sortable" data-column="percall_cum" data-type="number" title="Cumulative time divided by primitive calls (cumtime/primitive calls)">percall</th>
+                    <th class="sortable" data-column="filename" data-type="text" title="File path, line number, and function name">filename:lineno(function)</th>
                 </tr>
             </thead>
             <tbody id="statsBody">
