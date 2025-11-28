@@ -218,4 +218,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Support
 
 For issues, questions, or contributions, please visit:
-https://github.com/yourusername/profiler-viz/issues
+https://github.com/nndat/profiler_viz/issues
