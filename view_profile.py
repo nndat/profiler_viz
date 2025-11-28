@@ -1,6 +1,6 @@
 import pstats
-from pstats import SortKey
 import io
+import sys
 import os
 import json
 
@@ -130,5 +130,5 @@ def view_profile_html(prof_file_path, output_html_path=None):
 
 if __name__ == "__main__":
     # Example usage
-    prof_file = "profile_20251128145255.prof"
+    prof_file = sys.argv[1]  # Get .prof file path from command line argument
     view_profile_html(prof_file)
