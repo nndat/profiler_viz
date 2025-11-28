@@ -19,6 +19,7 @@ def view_profile_html(prof_file_path, output_html_path=None):
 
     # Parse stats into structured data and calculate summary
     stats_data = []
+    call_relationships = {}  # Track caller-callee relationships
     total_functions = 0
     total_primitive_calls = 0
     total_calls = 0
@@ -30,14 +31,37 @@ def view_profile_html(prof_file_path, output_html_path=None):
 
     for func, (cc, nc, tt, ct, callers) in stats.stats.items():
         filename, line, func_name = func
+        func_key = f"{filename}:{line}({func_name})"
+
         stats_data.append({
             'ncalls': f"{nc}/{cc}" if nc != cc else str(nc),
             'tottime': tt,
             'percall_tot': tt / nc if nc > 0 else 0,
             'cumtime': ct,
             'percall_cum': ct / cc if cc > 0 else 0,
-            'filename': f"{filename}:{line}({func_name})"
+            'filename': func_key,
+            'func_name': func_name,
+            'file': filename,
+            'line': line
         })
+
+        # Build call relationships (who calls this function, and who this function calls)
+        call_relationships[func_key] = {
+            'callers': [],
+            'callees': []
+        }
+
+        # Store callers
+        for caller_func, caller_data in callers.items():
+            caller_filename, caller_line, caller_name = caller_func
+            caller_key = f"{caller_filename}:{caller_line}({caller_name})"
+            call_relationships[func_key]['callers'].append({
+                'name': caller_key,
+                'ncalls': caller_data[0],
+                'tottime': caller_data[2],
+                'cumtime': caller_data[3]
+            })
+
         total_functions += 1
         total_primitive_calls += cc
         total_calls += nc
@@ -48,6 +72,18 @@ def view_profile_html(prof_file_path, output_html_path=None):
         if ct > max_cumtime and not filename.startswith('<'):
             max_cumtime = ct
             main_function = func_name
+
+    # Build callees (reverse of callers)
+    for func_key, relationships in call_relationships.items():
+        for caller_info in relationships['callers']:
+            caller_key = caller_info['name']
+            if caller_key in call_relationships:
+                call_relationships[caller_key]['callees'].append({
+                    'name': func_key,
+                    'ncalls': caller_info['ncalls'],
+                    'tottime': caller_info['tottime'],
+                    'cumtime': caller_info['cumtime']
+                })
 
     # Get total time from stats
     if hasattr(stats, 'total_tt'):
@@ -65,6 +101,7 @@ def view_profile_html(prof_file_path, output_html_path=None):
     # Convert stats_data to JSON for JavaScript
     import json
     stats_json = json.dumps(stats_data)
+    call_relationships_json = json.dumps(call_relationships)
 
     # Create HTML
     html_content = f"""<!DOCTYPE html>
@@ -163,6 +200,59 @@ def view_profile_html(prof_file_path, output_html_path=None):
             font-size: 12px;
             line-height: 1.4;
         }}
+        .modal {{
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }}
+        .modal-content {{
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 900px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }}
+        .close {{
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }}
+        .close:hover,
+        .close:focus {{
+            color: black;
+        }}
+        .call-tree {{
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }}
+        .call-tree-item {{
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 2px solid #2196F3;
+            padding-left: 10px;
+        }}
+        .call-tree-item:hover {{
+            background-color: #f5f5f5;
+        }}
+        .clickable-row {{
+            cursor: pointer;
+        }}
+        .clickable-row:hover td {{
+            background-color: #e3f2fd !important;
+        }}
     </style>
 </head>
 <body>
@@ -230,12 +320,30 @@ percall - tottime divided by ncalls
 cumtime - cumulative time spent in the function (including sub-functions)
 percall - cumtime divided by primitive calls
 filename:lineno(function) - location and name of the function
+
+Click on any row to view callers and callees
         </pre>
+    </div>
+
+    <!-- Modal for call tree -->
+    <div id="callTreeModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalFunctionName"></h2>
+            <div id="modalFunctionDetails"></div>
+
+            <h3>Called By (Callers):</h3>
+            <div id="callersTree" class="call-tree"></div>
+
+            <h3>Calls (Callees):</h3>
+            <div id="calleesTree" class="call-tree"></div>
+        </div>
     </div>
 
     <script>
         // Stats data
         const statsData = {stats_json};
+        const callRelationships = {call_relationships_json};
         let currentSort = {{ column: 'cumtime', direction: 'desc' }};
         let filteredData = [...statsData];
 
@@ -246,6 +354,7 @@ filename:lineno(function) - location and name of the function
 
             data.forEach(row => {{
                 const tr = document.createElement('tr');
+                tr.className = 'clickable-row';
                 tr.innerHTML = `
                     <td class="num">${{row.ncalls}}</td>
                     <td class="num">${{row.tottime.toFixed(6)}}</td>
@@ -254,8 +363,80 @@ filename:lineno(function) - location and name of the function
                     <td class="num">${{row.percall_cum.toFixed(6)}}</td>
                     <td>${{row.filename}}</td>
                 `;
+                tr.onclick = () => showCallTree(row);
                 tbody.appendChild(tr);
             }});
+        }}
+
+        // Show call tree modal
+        function showCallTree(functionData) {{
+            const modal = document.getElementById('callTreeModal');
+            const modalFunctionName = document.getElementById('modalFunctionName');
+            const modalFunctionDetails = document.getElementById('modalFunctionDetails');
+            const callersTree = document.getElementById('callersTree');
+            const calleesTree = document.getElementById('calleesTree');
+
+            // Set function name
+            modalFunctionName.textContent = functionData.filename;
+
+            // Set function details
+            modalFunctionDetails.innerHTML = `
+                <table style="width: auto;">
+                    <tr>
+                        <td style="padding: 5px; font-weight: bold;">Calls:</td>
+                        <td style="padding: 5px;">${{functionData.ncalls}}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 5px; font-weight: bold;">Total Time:</td>
+                        <td style="padding: 5px;">${{functionData.tottime.toFixed(6)}} seconds</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 5px; font-weight: bold;">Cumulative Time:</td>
+                        <td style="padding: 5px;">${{functionData.cumtime.toFixed(6)}} seconds</td>
+                    </tr>
+                </table>
+            `;
+
+            // Get call relationships
+            const relationships = callRelationships[functionData.filename];
+
+            // Render callers
+            if (relationships && relationships.callers.length > 0) {{
+                callersTree.innerHTML = relationships.callers.map(caller => `
+                    <div class="call-tree-item">
+                        <strong>${{caller.name}}</strong><br>
+                        Calls: ${{caller.ncalls}}, CumTime: ${{caller.cumtime.toFixed(6)}}s
+                    </div>
+                `).join('');
+            }} else {{
+                callersTree.innerHTML = '<p>No callers (this might be a root function)</p>';
+            }}
+
+            // Render callees
+            if (relationships && relationships.callees.length > 0) {{
+                calleesTree.innerHTML = relationships.callees.map(callee => `
+                    <div class="call-tree-item">
+                        <strong>${{callee.name}}</strong><br>
+                        Calls: ${{callee.ncalls}}, CumTime: ${{callee.cumtime.toFixed(6)}}s
+                    </div>
+                `).join('');
+            }} else {{
+                calleesTree.innerHTML = '<p>No callees (this function doesn\\'t call other functions)</p>';
+            }}
+
+            modal.style.display = 'block';
+        }}
+
+        // Close modal
+        document.querySelector('.close').onclick = function() {{
+            document.getElementById('callTreeModal').style.display = 'none';
+        }}
+
+        window.onclick = function(event) {{
+            const modal = document.getElementById('callTreeModal');
+            if (event.target == modal) {{
+                modal.style.display = 'none';
+            }}
         }}
 
         // Sort data
