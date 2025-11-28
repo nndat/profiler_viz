@@ -23,7 +23,7 @@ pip install profiler-viz
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/profiler-viz.git
+git clone https://github.com/nndat/profiler_viz.git
 cd profiler-viz
 pip install -e .
 ```
