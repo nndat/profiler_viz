@@ -4,7 +4,7 @@
 
 1. Install required tools:
 ```bash
-pip install --upgrade pip setuptools wheel twine
+pip install --upgrade pip build twine
 ```
 
 2. Create accounts on:
@@ -17,13 +17,13 @@ pip install --upgrade pip setuptools wheel twine
 # Clean previous builds
 rm -rf build/ dist/ *.egg-info
 
-# Build distribution packages
-python setup.py sdist bdist_wheel
+# Build distribution packages (recommended method)
+python -m build
 ```
 
 This creates:
 - `dist/profiler-viz-0.1.0.tar.gz` - Source distribution
-- `dist/profiler_viz-0.1.0-py3-none-any.whl` - Wheel distribution (if wheel is installed)
+- `dist/profiler_viz-0.1.0-py3-none-any.whl` - Wheel distribution
 
 ## Test on TestPyPI (Recommended)
 
@@ -109,41 +109,37 @@ git push origin main --tags
 
 ## Automated Publishing with GitHub Actions
 
-Create `.github/workflows/publish.yml`:
+The workflow file `.github/workflows/publish.yml` is already configured in this repository.
 
-```yaml
-name: Publish to PyPI
+To use it:
 
-on:
-  release:
-    types: [published]
+1. **Create a PyPI API token:**
+   - Go to https://pypi.org/manage/account/
+   - Scroll to "API tokens" → Click "Add API token"
+   - Give it a name (e.g., "profiler-viz-github-actions")
+   - Choose scope: "Entire account" or specific to "profiler-viz" project
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.9'
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install setuptools wheel twine
-    - name: Build package
-      run: python setup.py sdist bdist_wheel
-    - name: Publish to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: twine upload dist/*
-```
+2. **Add the token to GitHub Secrets:**
+   - Go to your repo → Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `PYPI_API_TOKEN`
+   - Value: paste your PyPI token (starts with `pypi-...`)
+   - Click "Add secret"
 
-Add your PyPI token as a secret in GitHub:
-- Go to your repo → Settings → Secrets → New repository secret
-- Name: `PYPI_API_TOKEN`
-- Value: your PyPI token
+3. **Create a release to trigger the workflow:**
+   ```bash
+   # Update version first in setup.py and profiler_viz/__init__.py
+   git add .
+   git commit -m "Bump version to 0.1.0"
+   git tag v0.1.0
+   git push origin main --tags
+   ```
+
+   Then go to GitHub → Releases → "Create a new release" → Select tag `v0.1.0` → Publish release
+
+4. **The workflow will automatically:**
+   - Build the package using `python -m build`
+   - Upload to PyPI using your API token
 
 ## Post-Deployment
 
