@@ -71,4 +71,3 @@ def func_profile(dest=None):
         return decorator
 
     return decorator_wrapper
-
